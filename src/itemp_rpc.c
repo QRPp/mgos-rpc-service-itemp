@@ -27,7 +27,8 @@ static void itemp_send_cmd_handler(struct mg_rpc_request_info *ri, void *cb_arg,
     itc = ITCMD_WINDOW_OPEN;
   else if (!strcasecmp(cmd, "WINDOW-SHUT"))
     itc = ITCMD_WINDOW_SHUT;
-  else mg_rpc_errorf_gt(400, "unknown cmd %s", cmd);
+  else
+    mg_rpc_errorf_gt(400, "unknown cmd %s", cmd);
 
   if (itc != ITCMD_ADJUST) {
     if (!isnan(arg)) mg_rpc_errorf_gt(400, "arg is redundant with cmd %s", cmd);
