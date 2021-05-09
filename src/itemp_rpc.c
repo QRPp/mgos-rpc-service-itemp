@@ -2,7 +2,20 @@
 
 #include <mgos-helpers/rpc.h>
 
+#include <mgos-cc1101.h>
 #include <mgos-itemp.h>
+
+static struct status {
+  bool busy;
+  enum mgos_cc1101_tx_err err;
+} itst = {busy : false, err : CC1101_TX_OK};
+
+static void itst_cb(void *opaque) {
+  struct mgos_cc1101_tx_op *op = opaque;
+  itst.busy = false;
+  itst.err = op->err;
+  free(op);
+}
 
 #define SEND_CMD_FMT "{src:%H,cmd:%Q,arg:%f}"
 static void itemp_send_cmd_handler(struct mg_rpc_request_info *ri, void *cb_arg,
@@ -37,8 +50,10 @@ static void itemp_send_cmd_handler(struct mg_rpc_request_info *ri, void *cb_arg,
     if (arg < -64 || arg > 63.5) mg_rpc_errorf_gt(400, "need -64..63.5 arg");
   }
 
-  if (!mgos_itemp_send_cmd(src[0] << 16 | src[1] << 8 | src[2], itc, arg / 0.5))
+  if (!mgos_itemp_send_cmd(src[0] << 16 | src[1] << 8 | src[2], itc,
+                           arg / 0.5, itst_cb, NULL))
     mg_rpc_errorf_gt(500, "%s() failed", "mgos_itemp_send_cmd");
+  itst.busy = true;
   mg_rpc_send_responsef(ri, NULL);
 err:
   if (cmd) free(cmd);
@@ -59,10 +74,13 @@ static void itemp_setup_rf_handler(struct mg_rpc_request_info *ri, void *cb_arg,
 static void itemp_status_handler(struct mg_rpc_request_info *ri, void *cb_arg,
                                  struct mg_rpc_frame_info *fi,
                                  struct mg_str args) {
-  struct itemp_status st;
-  if (!mgos_itemp_status(&st))
-    mg_rpc_errorf_ret(500, "error getting iTemp status");
-  mg_rpc_send_responsef(ri, "{busy:%B,ok:%B}", st.busy, st.ok);
+  if (itst.busy)
+    mg_rpc_send_responsef(ri, "{busy:%B}", itst.busy);
+  else if (itst.err == CC1101_TX_OK)
+    mg_rpc_send_responsef(ri, "{busy:%B,ok:%B}", itst.busy, true);
+  else
+    mg_rpc_send_responsef(ri, "{busy:%B,ok:%B,err:%d}", itst.busy, false,
+                          itst.err);
 }
 
 bool mgos_rpc_service_itemp_init() {
