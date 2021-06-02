@@ -17,15 +17,17 @@ static void itst_cb(void *opaque) {
   free(op);
 }
 
-#define SEND_CMD_FMT "{src:%H,cmd:%Q,arg:%f}"
+#define SEND_CMD_FMT "{src:%H,cmd:%Q,arg:%f,quiet_us:%u}"
 static void itemp_send_cmd_handler(struct mg_rpc_request_info *ri, void *cb_arg,
                                    struct mg_rpc_frame_info *fi,
                                    struct mg_str args) {
   float arg = NAN;
   char *cmd = NULL;
+  unsigned quiet_us = 0;
   uint8_t *src = NULL;
   int src_sz = 0;
-  json_scanf(args.p, args.len, ri->args_fmt, &src_sz, &src, &cmd, &arg);
+  json_scanf(args.p, args.len, ri->args_fmt, &src_sz, &src, &cmd, &arg,
+      &quiet_us);
   if (!src || !cmd) mg_rpc_errorf_gt(400, "src&cmd are required");
   if (src_sz != 3) mg_rpc_errorf_gt(400, "src must be 3 bytes");
 
@@ -51,7 +53,7 @@ static void itemp_send_cmd_handler(struct mg_rpc_request_info *ri, void *cb_arg,
   }
 
   if (!mgos_itemp_send_cmd(src[0] << 16 | src[1] << 8 | src[2], itc,
-                           arg / 0.5, itst_cb, NULL))
+                           arg / 0.5, quiet_us, itst_cb, NULL))
     mg_rpc_errorf_gt(500, "%s() failed", "mgos_itemp_send_cmd");
   itst.busy = true;
   mg_rpc_send_responsef(ri, NULL);
